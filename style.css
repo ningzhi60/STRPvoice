@@ -1,0 +1,158 @@
+/* ════════════════════════════════════
+   VoiceRP - 语气朗读扩展样式
+   ════════════════════════════════════ */
+
+/* ── 对话包裹层 ── */
+.vrp-dialogue-wrap {
+    position: relative;
+    display: inline;
+}
+
+/* ── 朗读按钮 ── */
+.vrp-speak-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-left: 3px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--SmartThemeQuoteColor, #888);
+    cursor: pointer;
+    opacity: 0.4;
+    transition: all 0.25s ease;
+    vertical-align: middle;
+    font-size: 11px;
+    line-height: 1;
+}
+
+.vrp-speak-btn:hover {
+    opacity: 1;
+    background: rgba(128, 128, 128, 0.15);
+    color: var(--SmartThemeBodyColor, #ccc);
+    transform: scale(1.15);
+}
+
+.vrp-speak-btn:active {
+    transform: scale(0.95);
+}
+
+/* ── 播放中状态 ── */
+.vrp-speak-btn.vrp-playing {
+    opacity: 1;
+    color: var(--SmartThemeFavoriteColor, #ff6b6b);
+    animation: vrp-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes vrp-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.7; transform: scale(1.1); }
+}
+
+/* ── 情绪标签 ── */
+.vrp-emotion-tag {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 10px;
+    line-height: 1.6;
+    vertical-align: middle;
+    font-family: sans-serif;
+    letter-spacing: 0.3px;
+    pointer-events: none;
+    animation: vrp-tag-in 0.3s ease-out;
+    background: rgba(128, 128, 128, 0.12);
+    color: var(--SmartThemeQuoteColor, #aaa);
+    border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+/* 不同情绪的颜色 */
+.vrp-emotion-tag[data-emotion="cold"]      { color: #6B9FC4; border-color: #6B9FC455; background: #6B9FC412; }
+.vrp-emotion-tag[data-emotion="tired"]     { color: #9B8B6B; border-color: #9B8B6B55; background: #9B8B6B12; }
+.vrp-emotion-tag[data-emotion="gentle"]    { color: #B8A0D0; border-color: #B8A0D055; background: #B8A0D012; }
+.vrp-emotion-tag[data-emotion="angry"]     { color: #D05050; border-color: #D0505055; background: #D0505012; }
+.vrp-emotion-tag[data-emotion="sad"]       { color: #5B8BA0; border-color: #5B8BA055; background: #5B8BA012; }
+.vrp-emotion-tag[data-emotion="tender"]    { color: #C09878; border-color: #C0987855; background: #C0987812; }
+.vrp-emotion-tag[data-emotion="neutral"]   { color: #8A8A8A; border-color: #8A8A8A55; background: #8A8A8A12; }
+.vrp-emotion-tag[data-emotion="worried"]   { color: #C4A040; border-color: #C4A04055; background: #C4A04012; }
+.vrp-emotion-tag[data-emotion="stubborn"]  { color: #8A6BB0; border-color: #8A6BB055; background: #8A6BB012; }
+.vrp-emotion-tag[data-emotion="playful"]   { color: #D490A8; border-color: #D490A855; background: #D490A812; }
+.vrp-emotion-tag[data-emotion="sarcastic"] { color: #A8986B; border-color: #A8986B55; background: #A8986B12; }
+.vrp-emotion-tag[data-emotion="happy"]     { color: #60B870; border-color: #60B87055; background: #60B87012; }
+.vrp-emotion-tag[data-emotion="fearful"]   { color: #A070B8; border-color: #A070B855; background: #A070B812; }
+.vrp-emotion-tag[data-emotion="seductive"] { color: #D06080; border-color: #D0608055; background: #D0608012; }
+
+@keyframes vrp-tag-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.9); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.vrp-emotion-tag.vrp-fade-out {
+    transition: opacity 0.5s ease;
+    opacity: 0;
+}
+
+/* ════════════════════════════════════
+   设置面板
+   ════════════════════════════════════ */
+
+.vrp-settings-panel .vrp-row {
+    margin-bottom: 10px;
+}
+
+.vrp-settings-panel .vrp-row label:not(.checkbox_label) {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.vrp-settings-panel select,
+.vrp-settings-panel input[type="text"],
+.vrp-settings-panel input[type="password"] {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 5px;
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    background: var(--SmartThemeBlurTintColor, rgba(0,0,0,0.2));
+    color: var(--SmartThemeBodyColor, #ccc);
+    font-size: 13px;
+}
+
+.vrp-settings-panel select:focus,
+.vrp-settings-panel input:focus {
+    outline: none;
+    border-color: var(--SmartThemeFavoriteColor, #ff6b6b);
+}
+
+.vrp-settings-panel .vrp-hint {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    opacity: 0.5;
+}
+
+.vrp-settings-panel .vrp-hr {
+    border: none;
+    border-top: 1px solid rgba(128, 128, 128, 0.15);
+    margin: 12px 0;
+}
+
+.vrp-settings-panel .vrp-provider-settings {
+    padding-left: 8px;
+    border-left: 2px solid rgba(128, 128, 128, 0.15);
+    margin-bottom: 8px;
+}
+
+/* 测试按钮 */
+#vrp_test_btn {
+    margin-top: 4px;
+}
+
+#vrp_test_btn i {
+    margin-right: 4px;
+}

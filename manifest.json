@@ -1,0 +1,12 @@
+{
+    "display_name": "VoiceRP - 语气朗读",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "VoiceRP",
+    "version": "1.0.0",
+    "homePage": "",
+    "auto_update": false
+}
