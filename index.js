@@ -594,12 +594,105 @@ async function testSpeak() {
     }
 }
 
+/* ───────────── 聊天界面快捷开关 ───────────── */
+
+function initToggleButton() {
+    // 在输入框右侧工具栏添加开关按钮
+    const toggleBtn = $(`
+        <div id="vrp_toggle_btn" class="vrp-toggle-btn list-group-item flex-container flexGap5" title="VoiceRP 开关">
+            <i class="fa-solid fa-volume-high"></i>
+        </div>
+    `);
+
+    // 尝试插入到 ST 的输入栏按钮区域
+    const targetArea = $('#leftSendForm .fa-puzzle-piece').closest('.list-group-item').parent()  // 扩展按钮旁
+        || $('#send_form')
+        || $('#form_sheld');
+
+    if ($('#data_bank_wand_container').length) {
+        // 如果找到 data_bank 按钮区域（新版 ST），插在它旁边
+        $('#data_bank_wand_container').after(toggleBtn);
+    } else if ($('#rightSendForm').length) {
+        // 插在右侧发送区域
+        $('#rightSendForm').prepend(toggleBtn);
+    } else if ($('#send_form').length) {
+        // 兜底：直接插到 send_form
+        $('#send_form').prepend(toggleBtn);
+    }
+
+    updateToggleBtnState();
+
+    // 点击切换
+    toggleBtn.on('click', () => {
+        const s = settings();
+        s.enabled = !s.enabled;
+        saveSettings();
+
+        // 同步设置面板里的 checkbox
+        $('#vrp_enabled').prop('checked', s.enabled);
+
+        updateToggleBtnState();
+
+        if (s.enabled) {
+            processAllMessages();
+            toastr.success('VoiceRP 已开启', 'VoiceRP', { timeOut: 1500 });
+        } else {
+            hideAllSpeakButtons();
+            stopCurrentAudio();
+            toastr.info('VoiceRP 已关闭', 'VoiceRP', { timeOut: 1500 });
+        }
+    });
+}
+
+/** 更新开关按钮的视觉状态 */
+function updateToggleBtnState() {
+    const btn = $('#vrp_toggle_btn');
+    if (!btn.length) return;
+
+    const enabled = settings().enabled;
+    btn.toggleClass('vrp-toggle-active', enabled);
+    btn.attr('title', enabled ? 'VoiceRP 已开启（点击关闭）' : 'VoiceRP 已关闭（点击开启）');
+
+    // 切换图标
+    btn.find('i').attr('class', enabled
+        ? 'fa-solid fa-volume-high'
+        : 'fa-solid fa-volume-xmark'
+    );
+}
+
+/** 隐藏所有已注入的朗读按钮 */
+function hideAllSpeakButtons() {
+    document.querySelectorAll('.vrp-speak-btn').forEach(btn => {
+        btn.style.display = 'none';
+    });
+}
+
+/** 显示所有已注入的朗读按钮 */
+function showAllSpeakButtons() {
+    document.querySelectorAll('.vrp-speak-btn').forEach(btn => {
+        btn.style.display = '';
+    });
+}
+
 /* ───────────── 初始化 ───────────── */
 
 jQuery(async () => {
     loadSettings();
     initSettingsUI();
     initClickHandler();
+    initToggleButton();
+
+    // 设置面板的 enabled checkbox 变化时同步开关按钮
+    $('#vrp_enabled').on('change', function () {
+        updateToggleBtnState();
+        if (!this.checked) {
+            hideAllSpeakButtons();
+            stopCurrentAudio();
+        } else {
+            showAllSpeakButtons();
+            processAllMessages();
+        }
+    });
 
     // 监听事件
     eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
