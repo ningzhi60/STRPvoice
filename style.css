@@ -156,3 +156,29 @@
 #vrp_test_btn i {
     margin-right: 4px;
 }
+
+/* ════════════════════════════════════
+   聊天界面快捷开关按钮
+   ════════════════════════════════════ */
+
+#vrp_toggle_btn {
+    cursor: pointer;
+    opacity: 0.5;
+    transition: all 0.3s ease;
+    font-size: 14px;
+}
+
+#vrp_toggle_btn:hover {
+    opacity: 0.9;
+}
+
+/* 开启状态 */
+#vrp_toggle_btn.vrp-toggle-active {
+    opacity: 1;
+    color: var(--SmartThemeFavoriteColor, #ff6b6b);
+}
+
+/* 关闭状态下图标变暗 */
+#vrp_toggle_btn:not(.vrp-toggle-active) {
+    color: var(--SmartThemeQuoteColor, #666);
+}
