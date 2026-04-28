@@ -111,6 +111,7 @@
     opacity: 0.8;
 }
 
+.vrp-settings-panel textarea.vrp-textarea,
 .vrp-settings-panel select,
 .vrp-settings-panel input[type="text"],
 .vrp-settings-panel input[type="password"] {
@@ -121,12 +122,21 @@
     background: var(--SmartThemeBlurTintColor, rgba(0,0,0,0.2));
     color: var(--SmartThemeBodyColor, #ccc);
     font-size: 13px;
+    font-family: monospace;
+    resize: vertical;
 }
 
+.vrp-settings-panel textarea.vrp-textarea:focus,
 .vrp-settings-panel select:focus,
 .vrp-settings-panel input:focus {
     outline: none;
     border-color: var(--SmartThemeFavoriteColor, #ff6b6b);
+}
+
+.vrp-settings-panel .vrp-small-btn {
+    margin-top: 6px;
+    font-size: 12px;
+    padding: 4px 10px;
 }
 
 .vrp-settings-panel .vrp-hint {
