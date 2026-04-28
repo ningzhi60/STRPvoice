@@ -293,7 +293,7 @@ async function speakMiniMax(text, emotion) {
     };
 
     let url = 'https://api.minimax.io/v1/t2a_v2';
-    if (s.mm_group_id) url = 'https://api.minimaxi.chat/v1/t2a_v2?GroupId=' + s.mm_group_id;
+    if (s.mm_group_id) url = 'https://api.minimaxi.com/v1/t2a_v2?GroupId=' + s.mm_group_id;
 
     const resp = await fetch(url, {
         method: 'POST',
