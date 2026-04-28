@@ -1,8 +1,8 @@
 /**
  * VoiceRP - SillyTavern 语气朗读扩展
- *
  * 支持 TTS：MiniMax / ElevenLabs / fish.audio / 浏览器内置
  * 支持自定义对话符号抓取
+ * 双按钮：重听缓存 + 重新生成
  */
 
 import { extension_settings, getContext } from '../../../extensions.js';
@@ -75,8 +75,10 @@ const VALID_EMOTIONS = Object.keys(EMOTION_LABELS);
 
 let currentAudio = null;
 let playingBtnEl = null;
+let isProcessing = false;
 let idCounter = 0;
 let emotionCache = {};
+let audioCache = {};  // uid -> Blob 缓存已生成的音频
 
 function settings() { return extension_settings[EXT_NAME]; }
 
@@ -150,7 +152,7 @@ function buildSettingsHtml() {
                     </select>
                 </div>
                 <div id="vrp_mm_settings" class="vrp-provider-settings">
-                    <div class="vrp-row"><label>MiniMax API Key</label><input type="password" id="vrp_mm_api_key" placeholder="eyJ..." /></div>
+                    <div class="vrp-row"><label>MiniMax API Key</label><input type="text" id="vrp_mm_api_key" placeholder="sk-api-..." /></div>
                     <div class="vrp-row"><label>Group ID</label><input type="text" id="vrp_mm_group_id" placeholder="17xxxxxxxx" /><small class="vrp-hint">MiniMax \u5f00\u653e\u5e73\u53f0 \u2192 \u8d26\u6237\u7ba1\u7406</small></div>
                     <div class="vrp-row"><label>Voice ID\uff08\u514b\u9686\u58f0\u97f3 / \u9884\u8bbe\u58f0\u97f3\uff09</label><input type="text" id="vrp_mm_voice_id" placeholder="CustomVoice123 \u6216 male-qn-qingse" /></div>
                     <div class="vrp-row"><label>\u6a21\u578b</label><select id="vrp_mm_model">
@@ -163,7 +165,7 @@ function buildSettingsHtml() {
                     </select></div>
                 </div>
                 <div id="vrp_el_settings" class="vrp-provider-settings" style="display:none;">
-                    <div class="vrp-row"><label>ElevenLabs API Key</label><input type="password" id="vrp_el_api_key" placeholder="xi-..." /></div>
+                    <div class="vrp-row"><label>ElevenLabs API Key</label><input type="text" id="vrp_el_api_key" placeholder="xi-..." /></div>
                     <div class="vrp-row"><label>Voice ID</label><input type="text" id="vrp_el_voice_id" placeholder="voice ID" /></div>
                     <div class="vrp-row"><label>Model</label><select id="vrp_el_model_id">
                         <option value="eleven_multilingual_v2">Multilingual v2</option>
@@ -172,7 +174,7 @@ function buildSettingsHtml() {
                     </select></div>
                 </div>
                 <div id="vrp_fish_settings" class="vrp-provider-settings" style="display:none;">
-                    <div class="vrp-row"><label>fish.audio API Key</label><input type="password" id="vrp_fish_api_key" placeholder="sk-..." /></div>
+                    <div class="vrp-row"><label>fish.audio API Key</label><input type="text" id="vrp_fish_api_key" placeholder="sk-..." /></div>
                     <div class="vrp-row"><label>Reference ID (\u97f3\u8272)</label><input type="text" id="vrp_fish_reference_id" placeholder="\u53c2\u8003\u97f3\u8272 ID" /></div>
                 </div>
                 <hr class="vrp-hr" />
@@ -194,9 +196,10 @@ function initSettingsUI() {
     $('#vrp_rescan_btn').on('click', () => {
         document.querySelectorAll('#chat .mes .mes_text').forEach(el => {
             delete el.dataset.vrpProcessed;
-            el.querySelectorAll('.vrp-speak-btn, .vrp-emotion-tag').forEach(n => n.remove());
+            el.querySelectorAll('.vrp-speak-btn, .vrp-regen-btn, .vrp-emotion-tag').forEach(n => n.remove());
             el.querySelectorAll('.vrp-dialogue-wrap').forEach(w => w.replaceWith(...w.childNodes));
         });
+        audioCache = {};
         processAllMessages();
         toastr.success('\u5df2\u91cd\u65b0\u626b\u63cf\u6240\u6709\u6d88\u606f', 'VoiceRP');
     });
@@ -251,36 +254,97 @@ async function analyzeEmotion(text) {
 /* ---- TTS Engines ---- */
 
 function stopCurrentAudio() {
-    if (currentAudio) { currentAudio.pause(); currentAudio.src = ''; currentAudio = null; }
-    if (playingBtnEl) { playingBtnEl.classList.remove('vrp-playing'); playingBtnEl = null; }
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.src = '';
+        currentAudio = null;
+    }
+    if (playingBtnEl) {
+        playingBtnEl.classList.remove('vrp-playing');
+        playingBtnEl = null;
+    }
+    isProcessing = false;
 }
 
-async function speakText(text, btnEl) {
-    if (playingBtnEl === btnEl && currentAudio) { stopCurrentAudio(); return; }
+/**
+ * 生成语音（调用 API），结果缓存到 audioCache
+ */
+async function generateAndSpeak(text, uid, btnEl) {
+    if (isProcessing) return;
     stopCurrentAudio();
+    isProcessing = true;
 
-    const emotion = await analyzeEmotion(text);
-    if (btnEl && emotion !== 'neutral') showEmotionTag(btnEl, emotion);
     if (btnEl) { btnEl.classList.add('vrp-playing'); playingBtnEl = btnEl; }
 
     try {
-        const s = settings();
-        if (s.tts_provider === 'minimax') await speakMiniMax(text, emotion);
-        else if (s.tts_provider === 'elevenlabs') await speakElevenLabs(text, emotion);
-        else if (s.tts_provider === 'fish_audio') await speakFishAudio(text, emotion);
-        else await speakBrowser(text, emotion);
+        const emotion = await analyzeEmotion(text);
+        if (btnEl && emotion !== 'neutral') showEmotionTag(btnEl, emotion);
+
+        const blob = await generateTTSBlob(text, emotion);
+
+        // 缓存音频
+        if (uid) {
+            audioCache[uid] = blob;
+            // 显示重新生成按钮
+            showRegenButton(uid);
+        }
+
+        await playAudioBlob(blob);
     } catch (err) {
         console.error(LOG_TAG, 'TTS error:', err);
         toastr.error('\u6717\u8bfb\u5931\u8d25: ' + err.message, 'VoiceRP');
     } finally {
-        if (playingBtnEl === btnEl) stopCurrentAudio();
+        isProcessing = false;
+        if (btnEl) btnEl.classList.remove('vrp-playing');
+        if (playingBtnEl === btnEl) playingBtnEl = null;
     }
 }
 
-async function speakMiniMax(text, emotion) {
+/**
+ * 重听缓存的音频（不调用 API）
+ */
+async function replayAudio(uid, btnEl) {
+    if (!audioCache[uid]) {
+        // 没有缓存，当作首次生成
+        const text = btnEl ? btnEl.dataset.vrpText : null;
+        if (text) return generateAndSpeak(text, uid, btnEl);
+        return;
+    }
+
+    // 如果正在播放，点击停止
+    if (playingBtnEl === btnEl && currentAudio && !currentAudio.paused) {
+        stopCurrentAudio();
+        return;
+    }
+
+    stopCurrentAudio();
+    if (btnEl) { btnEl.classList.add('vrp-playing'); playingBtnEl = btnEl; }
+
+    try {
+        await playAudioBlob(audioCache[uid]);
+    } catch (err) {
+        console.error(LOG_TAG, 'Replay error:', err);
+    } finally {
+        if (btnEl) btnEl.classList.remove('vrp-playing');
+        if (playingBtnEl === btnEl) playingBtnEl = null;
+    }
+}
+
+/**
+ * 调用 TTS API 返回 Blob（不播放）
+ */
+async function generateTTSBlob(text, emotion) {
     const s = settings();
-    if (!s.mm_api_key) { toastr.warning('\u8bf7\u586b\u5199 MiniMax API Key', 'VoiceRP'); return; }
-    if (!s.mm_voice_id) { toastr.warning('\u8bf7\u586b\u5199 MiniMax Voice ID', 'VoiceRP'); return; }
+    if (s.tts_provider === 'minimax') return await genMiniMax(text, emotion);
+    else if (s.tts_provider === 'elevenlabs') return await genElevenLabs(text, emotion);
+    else if (s.tts_provider === 'fish_audio') return await genFishAudio(text, emotion);
+    else return await genBrowser(text, emotion);
+}
+
+async function genMiniMax(text, emotion) {
+    const s = settings();
+    if (!s.mm_api_key) throw new Error('\u8bf7\u586b\u5199 MiniMax API Key');
+    if (!s.mm_voice_id) throw new Error('\u8bf7\u586b\u5199 MiniMax Voice ID');
 
     const mmEmotion = EMOTION_TO_MM[emotion] || 'neutral';
     const body = {
@@ -292,8 +356,8 @@ async function speakMiniMax(text, emotion) {
         format: 'mp3',
     };
 
-    let url = 'https://api.minimax.io/v1/t2a_v2';
-    if (s.mm_group_id) url = 'https://api.minimaxi.chat/v1/t2a_v2?GroupId=' + s.mm_group_id;
+    let url = 'https://api.minimaxi.com/v1/t2a_v2';
+    if (s.mm_group_id) url = 'https://api.minimaxi.com/v1/t2a_v2?GroupId=' + s.mm_group_id;
 
     const resp = await fetch(url, {
         method: 'POST',
@@ -302,7 +366,6 @@ async function speakMiniMax(text, emotion) {
     });
 
     if (!resp.ok) throw new Error('MiniMax API ' + resp.status + ': ' + await resp.text());
-
     const data = await resp.json();
     if (data.base_resp && data.base_resp.status_code !== 0) throw new Error('MiniMax: ' + data.base_resp.status_msg);
 
@@ -310,12 +373,12 @@ async function speakMiniMax(text, emotion) {
     if (!audioHex) throw new Error('MiniMax \u672a\u8fd4\u56de\u97f3\u9891');
 
     const bytes = new Uint8Array(audioHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
-    await playAudioBlob(new Blob([bytes], { type: 'audio/mpeg' }));
+    return new Blob([bytes], { type: 'audio/mpeg' });
 }
 
-async function speakElevenLabs(text, emotion) {
+async function genElevenLabs(text, emotion) {
     const s = settings();
-    if (!s.el_api_key || !s.el_voice_id) { toastr.warning('\u8bf7\u586b\u5199 ElevenLabs API Key \u548c Voice ID', 'VoiceRP'); return; }
+    if (!s.el_api_key || !s.el_voice_id) throw new Error('\u8bf7\u586b\u5199 ElevenLabs API Key \u548c Voice ID');
     const vs = EMOTION_EL_MAP[emotion] || EMOTION_EL_MAP.neutral;
     const resp = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + s.el_voice_id, {
         method: 'POST',
@@ -323,22 +386,23 @@ async function speakElevenLabs(text, emotion) {
         body: JSON.stringify({ text, model_id: s.el_model_id, voice_settings: { stability: vs.stability, similarity_boost: vs.similarity_boost, style: vs.style, use_speaker_boost: true } }),
     });
     if (!resp.ok) throw new Error('ElevenLabs ' + resp.status + ': ' + await resp.text());
-    await playAudioBlob(await resp.blob());
+    return await resp.blob();
 }
 
-async function speakFishAudio(text, emotion) {
+async function genFishAudio(text, emotion) {
     const s = settings();
-    if (!s.fish_api_key || !s.fish_reference_id) { toastr.warning('\u8bf7\u586b\u5199 fish.audio API Key \u548c Reference ID', 'VoiceRP'); return; }
+    if (!s.fish_api_key || !s.fish_reference_id) throw new Error('\u8bf7\u586b\u5199 fish.audio API Key \u548c Reference ID');
     const resp = await fetch('https://api.fish.audio/v1/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.fish_api_key },
         body: JSON.stringify({ text, reference_id: s.fish_reference_id, format: 'mp3' }),
     });
     if (!resp.ok) throw new Error('fish.audio ' + resp.status + ': ' + await resp.text());
-    await playAudioBlob(await resp.blob());
+    return await resp.blob();
 }
 
-function speakBrowser(text, emotion) {
+function genBrowser(text, emotion) {
+    // 浏览器 TTS 没有 blob，返回一个特殊标记
     return new Promise((resolve, reject) => {
         if (!window.speechSynthesis) { reject(new Error('Browser TTS not supported')); return; }
         window.speechSynthesis.cancel();
@@ -349,13 +413,16 @@ function speakBrowser(text, emotion) {
         u.rate = rm[emotion] || 0.9;
         const v = window.speechSynthesis.getVoices().find(v => v.lang.startsWith('zh'));
         if (v) u.voice = v;
-        u.onend = resolve;
+        u.onend = () => resolve(new Blob([], { type: 'audio/browser-tts' }));
         u.onerror = (e) => reject(new Error(e.error));
         window.speechSynthesis.speak(u);
     });
 }
 
 function playAudioBlob(blob) {
+    // 浏览器 TTS 的特殊 blob 不需要播放
+    if (blob.type === 'audio/browser-tts') return Promise.resolve();
+
     return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
@@ -383,13 +450,27 @@ function processMessageElement(mesEl) {
         const raw = stripQuotes(match);
         const uid = 'vrp-' + (++idCounter);
         const esc = escapeAttr(raw);
-        return '<span class="vrp-dialogue-wrap" data-vrp-uid="' + uid + '">' + match +
-            '<button class="vrp-speak-btn" data-vrp-uid="' + uid + '" data-vrp-text="' + esc + '" title="\u6717\u8bfb\u8fd9\u53e5">' +
-            '<i class="fa-solid fa-volume-high"></i></button></span>';
+        return '<span class="vrp-dialogue-wrap" data-vrp-uid="' + uid + '">' +
+            match +
+            '<span class="vrp-btn-group">' +
+                '<button class="vrp-speak-btn" data-vrp-uid="' + uid + '" data-vrp-text="' + esc + '" title="\u6717\u8bfb / \u91cd\u542c">' +
+                    '<i class="fa-solid fa-volume-high"></i>' +
+                '</button>' +
+                '<button class="vrp-regen-btn vrp-hidden" data-vrp-uid="' + uid + '" data-vrp-text="' + esc + '" title="\u91cd\u65b0\u751f\u6210\uff08\u6d88\u8017\u989d\u5ea6\uff09">' +
+                    '<i class="fa-solid fa-rotate"></i>' +
+                '</button>' +
+            '</span>' +
+            '</span>';
     });
 
     if (hasMatch) mesText.innerHTML = html;
     mesText.dataset.vrpProcessed = '1';
+}
+
+/** 首次生成成功后，显示重新生成按钮 */
+function showRegenButton(uid) {
+    const regenBtn = document.querySelector('.vrp-regen-btn[data-vrp-uid="' + uid + '"]');
+    if (regenBtn) regenBtn.classList.remove('vrp-hidden');
 }
 
 function showEmotionTag(btnEl, emotion) {
@@ -417,20 +498,55 @@ async function onMessageReceived(messageIndex) {
     processMessageElement(mesEl);
     if (settings().auto_speak) {
         const btn = mesEl.querySelector('.vrp-speak-btn');
-        if (btn && btn.dataset.vrpText) await speakText(btn.dataset.vrpText, btn);
+        if (btn && btn.dataset.vrpText) {
+            await generateAndSpeak(btn.dataset.vrpText, btn.dataset.vrpUid, btn);
+        }
     }
 }
 
+/* ---- Click Handlers ---- */
+
 function initClickHandler() {
+    // 喇叭按钮：首次=生成+播放，之后=重听缓存
     $(document).on('click', '.vrp-speak-btn', function(e) {
         e.preventDefault(); e.stopPropagation();
-        if (this.dataset.vrpText) speakText(this.dataset.vrpText, this);
+        const uid = this.dataset.vrpUid;
+        const text = this.dataset.vrpText;
+        if (!text) return;
+
+        if (audioCache[uid]) {
+            // 有缓存 -> 重听
+            replayAudio(uid, this);
+        } else {
+            // 无缓存 -> 首次生成
+            generateAndSpeak(text, uid, this);
+        }
+    });
+
+    // 刷新按钮：重新生成（清除缓存，重新调 API）
+    $(document).on('click', '.vrp-regen-btn', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        const uid = this.dataset.vrpUid;
+        const text = this.dataset.vrpText;
+        if (!text) return;
+
+        // 清除这句的缓存和情绪缓存
+        delete audioCache[uid];
+        delete emotionCache[text];
+
+        // 找到对应的喇叭按钮来显示播放状态
+        const speakBtn = document.querySelector('.vrp-speak-btn[data-vrp-uid="' + uid + '"]');
+        generateAndSpeak(text, uid, speakBtn || this);
     });
 }
 
 async function testSpeak() {
     toastr.info('\u6b63\u5728\u6d4b\u8bd5\u6717\u8bfb...', 'VoiceRP');
-    try { await speakText('\u4f60\u597d\uff0c\u8fd9\u662fVoiceRP\u7684\u8bed\u97f3\u6d4b\u8bd5\u3002', null); toastr.success('\u6d4b\u8bd5\u5b8c\u6210\uff01', 'VoiceRP'); }
+    try {
+        const blob = await generateTTSBlob('\u4f60\u597d\uff0c\u8fd9\u662fVoiceRP\u7684\u8bed\u97f3\u6d4b\u8bd5\u3002', 'neutral');
+        await playAudioBlob(blob);
+        toastr.success('\u6d4b\u8bd5\u5b8c\u6210\uff01', 'VoiceRP');
+    }
     catch (err) { toastr.error('\u6d4b\u8bd5\u5931\u8d25: ' + err.message, 'VoiceRP'); }
 }
 
@@ -462,7 +578,7 @@ function updateToggleBtnState() {
     btn.find('i').attr('class', on ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark');
 }
 
-function hideAllSpeakButtons() { document.querySelectorAll('.vrp-speak-btn').forEach(b => b.style.display='none'); }
+function hideAllSpeakButtons() { document.querySelectorAll('.vrp-speak-btn, .vrp-regen-btn').forEach(b => b.style.display='none'); }
 function showAllSpeakButtons() { document.querySelectorAll('.vrp-speak-btn').forEach(b => b.style.display=''); }
 
 /* ---- Init ---- */
@@ -480,7 +596,7 @@ jQuery(async () => {
     });
 
     eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
-    eventSource.on(event_types.CHAT_CHANGED, () => { emotionCache = {}; setTimeout(processAllMessages, 500); });
+    eventSource.on(event_types.CHAT_CHANGED, () => { emotionCache = {}; audioCache = {}; setTimeout(processAllMessages, 500); });
 
     const chatEl = document.getElementById('chat');
     if (chatEl) {
