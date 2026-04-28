@@ -8,14 +8,22 @@
     display: inline;
 }
 
-/* ── 朗读按钮 ── */
+/* ── 按钮组 ── */
+.vrp-btn-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 3px;
+    vertical-align: middle;
+}
+
+/* ── 朗读按钮（喇叭） ── */
 .vrp-speak-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 22px;
     height: 22px;
-    margin-left: 3px;
     padding: 0;
     border: none;
     border-radius: 4px;
@@ -24,7 +32,6 @@
     cursor: pointer;
     opacity: 0.4;
     transition: all 0.25s ease;
-    vertical-align: middle;
     font-size: 11px;
     line-height: 1;
 }
@@ -38,6 +45,41 @@
 
 .vrp-speak-btn:active {
     transform: scale(0.95);
+}
+
+/* ── 重新生成按钮（刷新） ── */
+.vrp-regen-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--SmartThemeQuoteColor, #888);
+    cursor: pointer;
+    opacity: 0.35;
+    transition: all 0.25s ease;
+    font-size: 10px;
+    line-height: 1;
+}
+
+.vrp-regen-btn:hover {
+    opacity: 1;
+    background: rgba(200, 150, 50, 0.15);
+    color: #d4a040;
+    transform: scale(1.15);
+}
+
+.vrp-regen-btn:active {
+    transform: scale(0.95) rotate(180deg);
+}
+
+/* 隐藏状态（首次生成前不显示） */
+.vrp-regen-btn.vrp-hidden {
+    display: none;
 }
 
 /* ── 播放中状态 ── */
