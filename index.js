@@ -349,7 +349,8 @@ async function genMiniMax(text, emotion) {
     const mmEmotion = EMOTION_TO_MM[emotion] || 'neutral';
     const body = {
         model: s.mm_model,
-        text: text,
+        text: text.replace(/<[^>]*>/g, '').replace(/[*_~`]/g, '').trim(),
+
         voice_setting: { voice_id: s.mm_voice_id, speed: 1.0, vol: 1.0, pitch: 0, emotion: mmEmotion },
         audio_sample_rate: 32000,
         bitrate: 128000,
